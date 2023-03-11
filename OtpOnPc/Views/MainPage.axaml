@@ -1,0 +1,67 @@
+<UserControl x:Class="OtpOnPc.Views.MainPage"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="using:OtpOnPc.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:viewModel="using:OtpOnPc.ViewModels"
+             d:DesignHeight="450"
+             d:DesignWidth="300"
+             x:CompileBindings="True"
+             x:DataType="viewModel:MainPageViewModel"
+             Focusable="True"
+             mc:Ignorable="d">
+    <UserControl.KeyBindings>
+        <KeyBinding Command="{Binding CopySelected}"
+                    CommandParameter="{Binding #listBox.SelectedItem}"
+                    Gesture="Ctrl+C" />
+    </UserControl.KeyBindings>
+    <Grid Margin="4" RowDefinitions="36,*">
+        <TextBlock Margin="0,0,4,0"
+                   HorizontalAlignment="Right"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource SystemFillColorAttentionBrush}"
+                   Text="{Binding Message.Value}" />
+
+        <ListBox x:Name="listBox"
+                 Grid.Row="1"
+                 Items="{Binding Items}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="viewModel:TotpItemViewModel">
+                    <Grid ColumnDefinitions="24,16,*,20" RowDefinitions="Auto,*">
+                        <Ellipse Grid.RowSpan="2"
+                                 Width="24"
+                                 Height="24"
+                                 VerticalAlignment="Center"
+                                 Stroke="{DynamicResource TextFillColorPrimaryBrush}"
+                                 StrokeThickness="2" />
+
+                        <TextBlock Grid.Column="2"
+                                   Margin="0,4,0,0"
+                                   FontSize="12"
+                                   Text="{Binding Name.Value}" />
+
+                        <TextBlock Grid.Row="1"
+                                   Grid.Column="2"
+                                   Margin="0,0,0,4"
+                                   FontSize="24"
+                                   FontWeight="Medium"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   Text="{Binding Code.Value}" />
+
+                        <Sector Grid.Row="1"
+                                Grid.Column="3"
+                                Width="20"
+                                Height="20"
+                                Margin="0,0,0,4"
+                                Fill="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                StartAngle="-90"
+                                SweepAngle="{ReflectionBinding SweepAngle,
+                                                               RelativeSource={RelativeSource AncestorType={x:Type local:MainPage},
+                                                                                              Mode=FindAncestor}}" />
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>
