@@ -9,69 +9,23 @@ using System.Threading.Tasks;
 
 namespace OtpOnPc.Services;
 
-public sealed class DemoTotpRepository : ITotpRepository
+public sealed class InMemoryTotpRepository : ITotpRepository
 {
-    private readonly List<TotpModel> _items = new();
-
-    public DemoTotpRepository()
+    private TotpModel[] _items =
     {
-        AddItem(new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "XXX App"));
-        AddItem(new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "YYY App"));
-        AddItem(new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "ZZZ App"));
+        new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "XXX App"),
+        new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "YYY App"),
+        new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "ZZZ App"),
+    };
+
+    public Task<TotpModel[]> Restore()
+    {
+        return Task.FromResult(_items);
     }
 
-    public event EventHandler<TotpModel>? Added;
-    public event EventHandler<TotpModel>? Deleted;
-    public event EventHandler<TotpModel>? Updated;
-    public event EventHandler<(int OldIndex, int NewIndex)>? Moved;
-
-    public Task AddItem(TotpModel item)
+    public Task Store(IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger)
     {
-        _items.Add(item);
-        Added?.Invoke(this, item);
-        return Task.CompletedTask;
-    }
-
-    public async Task DeleteItem(Guid id)
-    {
-        if (await FindItem(id) is { } model)
-        {
-            _items.Remove(model);
-            Deleted?.Invoke(this, model);
-        }
-    }
-
-    public Task<TotpModel?> FindItem(Guid id)
-    {
-        return Task.FromResult(_items.FirstOrDefault(o => o.Id == id));
-    }
-
-    public Task<IEnumerable<TotpModel>> GetItems()
-    {
-        return Task.FromResult<IEnumerable<TotpModel>>(_items);
-    }
-
-    public Task UpdateItem(TotpModel item)
-    {
-        var index = _items.FindIndex(v => v.Id == item.Id);
-        if (index >= 0)
-        {
-            _items[index] = item;
-            Updated?.Invoke(this, item);
-        }
-        return Task.CompletedTask;
-    }
-
-    public Task Move(int oldIndex, int newIndex)
-    {
-        if (0 <= oldIndex && oldIndex < _items.Count
-            && 0 <= newIndex && newIndex < _items.Count)
-        {
-            var item = _items[oldIndex];
-            _items.RemoveAt(oldIndex);
-            _items.Insert(newIndex, item);
-            Moved?.Invoke(this, (oldIndex, newIndex));
-        }
+        _items = items.ToArray();
         return Task.CompletedTask;
     }
 }

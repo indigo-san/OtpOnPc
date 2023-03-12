@@ -20,18 +20,6 @@
     <ui:NavigationView x:Name="navigation"
                        ExpandedModeThresholdWidth="600"
                        OpenPaneLength="256">
-        <ui:NavigationView.MenuItems>
-            <ui:NavigationViewItem Content="一覧" Tag="Main">
-                <ui:NavigationViewItem.Icon>
-                    <icons:SymbolIcon Symbol="Password" />
-                </ui:NavigationViewItem.Icon>
-            </ui:NavigationViewItem>
-            <ui:NavigationViewItem Content="アカウント追加" Tag="Add">
-                <ui:NavigationViewItem.Icon>
-                    <icons:SymbolIcon Symbol="PersonAdd" />
-                </ui:NavigationViewItem.Icon>
-            </ui:NavigationViewItem>
-        </ui:NavigationView.MenuItems>
         <ui:Frame x:Name="frame" IsNavigationStackEnabled="False" />
     </ui:NavigationView>
 </Window>

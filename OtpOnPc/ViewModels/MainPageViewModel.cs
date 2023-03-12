@@ -15,18 +15,19 @@ namespace OtpOnPc.ViewModels;
 
 public class MainPageViewModel
 {
-    private readonly ITotpRepository _totpRepos;
+    private readonly TotpModelManager _totpManager;
     private CancellationTokenSource? _cts;
+    internal readonly Task _initializeTask;
 
     public MainPageViewModel()
     {
-        _totpRepos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-        _ = Init();
+        _totpManager = AvaloniaLocator.Current.GetRequiredService<TotpModelManager>();
+        _initializeTask = Init();
 
-        _totpRepos.Updated += OnTotpReposUpdated;
-        _totpRepos.Added += OnTotpReposAdded;
-        _totpRepos.Deleted += OnTotpReposDeleted;
-        _totpRepos.Moved += OnTotpReposMoved;
+        _totpManager.Updated += OnTotpReposUpdated;
+        _totpManager.Added += OnTotpReposAdded;
+        _totpManager.Deleted += OnTotpReposDeleted;
+        _totpManager.Moved += OnTotpReposMoved;
 
         CopySelected = new ReactiveCommand<TotpItemViewModel>();
         CopySelected.Where(x => x != null)
@@ -55,7 +56,7 @@ public class MainPageViewModel
 
     private async Task Init()
     {
-        foreach (var item in await _totpRepos.GetItems())
+        foreach (var item in await _totpManager.GetItems())
         {
             Items.Add(new TotpItemViewModel(item));
         }
@@ -105,11 +106,11 @@ public class MainPageViewModel
 
     public async Task MoveItem(int oldIndex, int newIndex)
     {
-        await _totpRepos.Move(oldIndex, newIndex);
+        await _totpManager.Move(oldIndex, newIndex);
     }
 
     public async Task DeleteItem(TotpItemViewModel item)
     {
-        await _totpRepos.DeleteItem(item.Model.Value.Id);
+        await _totpManager.DeleteItem(item.Model.Value.Id);
     }
 }

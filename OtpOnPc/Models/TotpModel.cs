@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 namespace OtpOnPc.Models;
@@ -12,6 +13,7 @@ public record TotpModel(Guid Id, byte[] SecretKey, string Name, OtpHashMode Hash
 {
     private string? _lazy;
 
+    [JsonIgnore]
     public string Base32
     {
         get

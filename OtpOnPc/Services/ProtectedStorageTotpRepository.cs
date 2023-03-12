@@ -1,5 +1,9 @@
 ﻿#if WINDOWS10_0_17763_0_OR_GREATER
 
+using Nito.AsyncEx;
+
+using OtpNet;
+
 using OtpOnPc.Models;
 
 using System;
@@ -11,126 +15,94 @@ using System.Text.Json;
 using System.Threading.Tasks;
 
 using Windows.Security.Cryptography.DataProtection;
-using Windows.Storage.Streams;
 
 namespace OtpOnPc.Services;
 
 public sealed class ProtectedStorageTotpRepository : ITotpRepository
 {
-    private const string FileName = "protected-user-content.json";
+    private const string FileName = "wscd\\protected-account.json";
+    private const string IndexFileName = "wscd\\account-index.json";
+    private const string Directory = "wscd";
     private readonly IsolatedStorageFile _storageFile;
-    private readonly List<TotpModel> _items;
-    private Task _initTask;
+    private readonly AsyncLock _asyncLock = new();
 
     public ProtectedStorageTotpRepository()
     {
         _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
-        _items = new List<TotpModel>();
-        _initTask = Init();
     }
 
-    private async Task Init()
+    private static TotpModel ToModel(AccountInfo info, byte[] secretKey)
     {
-        if (_storageFile.FileExists(FileName))
+        return new TotpModel(info.Id, secretKey, info.Name, info.HashMode, info.Size);
+    }
+
+    public async Task<TotpModel[]> Restore()
+    {
+        using (await _asyncLock.LockAsync().ConfigureAwait(false))
         {
-            var prov = new DataProtectionProvider();
-
-            using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var inputStream = input.AsInputStream();
-            using var output = new MemoryStream();
-            using var outputStream = output.AsOutputStream();
-
-            await prov.UnprotectStreamAsync(inputStream, outputStream);
-
-            output.Position = 0;
-            var array = JsonSerializer.Deserialize<TotpModel[]>(output)!;
-            if (array != null)
+            AccountInfo[]? infos = null;
+            if (_storageFile.FileExists(IndexFileName))
             {
-                _items.AddRange(array);
+                using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
             }
+
+            if (infos != null && _storageFile.FileExists(FileName))
+            {
+                var prov = new DataProtectionProvider();
+
+                using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var inputStream = input.AsInputStream();
+                using var output = new MemoryStream();
+                using var outputStream = output.AsOutputStream();
+
+                await prov.UnprotectStreamAsync(inputStream, outputStream);
+
+                output.Position = 0;
+                var dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(output)
+                    .ConfigureAwait(false);
+                if (dict == null)
+                {
+                    return Array.Empty<TotpModel>();
+                }
+
+                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? ToModel(x, key) : null)
+                    .Where(x => x != null)
+                    .ToArray()!;
+            }
+
+            return Array.Empty<TotpModel>();
         }
     }
 
-    public event EventHandler<TotpModel>? Added;
-    public event EventHandler<TotpModel>? Deleted;
-    public event EventHandler<TotpModel>? Updated;
-    public event EventHandler<(int OldIndex, int NewIndex)>? Moved;
-
-    private async Task Save()
+    public async Task Store(IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger)
     {
-        var prov = new DataProtectionProvider("LOCAL=user");
-
-        using var unprotectedStream = new MemoryStream();
-        JsonSerializer.Serialize(unprotectedStream, _items);
-        unprotectedStream.Position = 0;
-
-        using var inputStream = unprotectedStream.AsInputStream();
-        using var output = _storageFile.CreateFile(FileName);
-        using var outputStream = output.AsOutputStream();
-
-        await prov.ProtectStreamAsync(inputStream, outputStream);
-    }
-
-    public async Task AddItem(TotpModel item)
-    {
-        await _initTask;
-
-        _items.Add(item);
-        await Save();
-        Added?.Invoke(this, item);
-    }
-
-    public async Task DeleteItem(Guid id)
-    {
-        await _initTask;
-
-        if (await FindItem(id) is { } model)
+        using (await _asyncLock.LockAsync().ConfigureAwait(false))
         {
-            _items.Remove(model);
-            await Save();
-            Deleted?.Invoke(this, model);
-        }
-    }
+            if (!_storageFile.DirectoryExists(Directory))
+            {
+                _storageFile.CreateDirectory(Directory);
+            }
 
-    public async Task<TotpModel?> FindItem(Guid id)
-    {
-        await _initTask;
+            // account-index.jsonだけ変更
+            using var infoStream = _storageFile.CreateFile(IndexFileName);
+            await JsonSerializer.SerializeAsync(infoStream, items.Select(AccountInfo.FromModel).ToArray());
 
-        return _items.FirstOrDefault(o => o.Id == id);
-    }
+            if (trigger is RepositoryStoreTrigger.OnAdded or RepositoryStoreTrigger.OnDeleted)
+            {
+                var prov = new DataProtectionProvider("LOCAL=user");
 
-    public async Task<IEnumerable<TotpModel>> GetItems()
-    {
-        await _initTask;
+                using var unprotectedStream = new MemoryStream();
+                await JsonSerializer.SerializeAsync(unprotectedStream, items.ToDictionary(x => x.Id, x => x.SecretKey))
+                    .ConfigureAwait(false);
+                unprotectedStream.Position = 0;
 
-        return _items;
-    }
+                using var inputStream = unprotectedStream.AsInputStream();
+                using var output = _storageFile.CreateFile(FileName);
+                using var outputStream = output.AsOutputStream();
 
-    public async Task UpdateItem(TotpModel item)
-    {
-        await _initTask;
-
-        var index = _items.FindIndex(v => v.Id == item.Id);
-        if (index >= 0)
-        {
-            _items[index] = item;
-            await Save();
-            Updated?.Invoke(this, item);
-        }
-    }
-
-    public async Task Move(int oldIndex, int newIndex)
-    {
-        await _initTask;
-
-        if (0 <= oldIndex && oldIndex < _items.Count
-            && 0 <= newIndex && newIndex < _items.Count)
-        {
-            var item = _items[oldIndex];
-            _items.RemoveAt(oldIndex);
-            _items.Insert(newIndex, item);
-            await Save();
-            Moved?.Invoke(this, (oldIndex, newIndex));
+                await prov.ProtectStreamAsync(inputStream, outputStream);
+            }
         }
     }
 }

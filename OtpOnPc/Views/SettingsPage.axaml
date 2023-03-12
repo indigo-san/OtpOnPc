@@ -1,0 +1,112 @@
+<UserControl x:Class="OtpOnPc.Views.SettingsPage"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:icons="clr-namespace:FluentIcons.FluentAvalonia;assembly=FluentIcons.FluentAvalonia"
+             xmlns:local="using:OtpOnPc.Views"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:viewModel="using:OtpOnPc.ViewModels"
+             d:DesignHeight="450"
+             d:DesignWidth="300"
+             x:CompileBindings="True"
+             x:DataType="viewModel:SettingsPageViewModel">
+    <UserControl.Styles>
+        <Style Selector="ui|SettingsExpanderItem:footerBottom /template/ ContentPresenter#FooterPresenter">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+        <Style Selector="ui|SettingsExpanderItem /template/ ui|FABorder#Root">
+            <Setter Property="CornerRadius" Value="{Binding Source={StaticResource ControlCornerRadius}}" />
+        </Style>
+
+    </UserControl.Styles>
+    <ScrollViewer>
+        <Grid Margin="4" RowDefinitions="36,*">
+            <TextBlock x:Name="title"
+                       Margin="40,0,0,0"
+                       VerticalAlignment="Center"
+                       Text="設定"
+                       Theme="{StaticResource SubtitleTextBlockStyle}" />
+
+            <StackPanel Grid.Row="4"
+                        Margin="0,8,0,0"
+                        Spacing="4">
+                <ui:SettingsExpanderItem Content="暗号化方法" Description="暗号化方法を設定します。">
+                    <ui:SettingsExpanderItem.IconSource>
+                        <icons:SymbolIconSource Symbol="LockShield" />
+                    </ui:SettingsExpanderItem.IconSource>
+                    <ui:SettingsExpanderItem.Resources>
+                        <Thickness x:Key="SettingsExpanderItemBottomFooterMargin">42,12,16,0</Thickness>
+                    </ui:SettingsExpanderItem.Resources>
+                    <ui:SettingsExpanderItem.Footer>
+                        <ComboBox MinWidth="200"
+                                  HorizontalAlignment="Right"
+                                  SelectedIndex="{Binding EncryptionMethod.Value}">
+                            <ComboBoxItem Content="Windows.Security.Cryptography.DataProtection" IsEnabled="{Binding IsWSCDEnabled}" />
+                            <ComboBoxItem Content="Aes暗号化" />
+                            <ComboBoxItem Content="GNU Privacy Guard" />
+                        </ComboBox>
+                    </ui:SettingsExpanderItem.Footer>
+                </ui:SettingsExpanderItem>
+                <Expander MinHeight="{DynamicResource SettingsExpanderMinHeight}"
+                          Padding="{DynamicResource SettingsExpanderPadding}"
+                          Background="{DynamicResource ExpanderBackground}"
+                          BorderBrush="{DynamicResource ExpanderHeaderBorderBrush}"
+                          BorderThickness="{DynamicResource ExpanderHeaderBorderThickness}"
+                          CornerRadius="{DynamicResource ControlCornerRadius}"
+                          Theme="{StaticResource SettingsExpanderExpanderStyle}">
+                    <Expander.ContentTransition>
+                        <CrossFade Duration="00:00:00.25" />
+                    </Expander.ContentTransition>
+                    <Expander.Header>
+                        <ui:SettingsExpanderItem Padding="{DynamicResource SettingsExpanderPadding}"
+                                                 Background="Transparent"
+                                                 Content="パスワードを変更"
+                                                 Description="Aes暗号化キーを変更します。"
+                                                 IsClickEnabled="True">
+                            <ui:SettingsExpanderItem.IconSource>
+                                <icons:SymbolIconSource Symbol="Password" />
+                            </ui:SettingsExpanderItem.IconSource>
+                        </ui:SettingsExpanderItem>
+                    </Expander.Header>
+
+                    <StackPanel Margin="0,0,8,0" Spacing="4">
+                        <StackPanel.Styles>
+                            <Style Selector="TextBox, ComboBox, NumericUpDown">
+                                <Setter Property="Width" Value="{DynamicResource SettingsPage_TextBox_Width}" />
+                                <Setter Property="HorizontalAlignment" Value="{DynamicResource SettingsPage_TextBox_HorizontalAlignment}" />
+                            </Style>
+                        </StackPanel.Styles>
+                        <TextBlock IsVisible="{Binding IsPasswordSet.Value}" Text="古いパスワード" />
+                        <TextBox Classes="revealPasswordButton"
+                                 IsVisible="{Binding IsPasswordSet.Value}"
+                                 PasswordChar="*"
+                                 Text="{Binding OldPassword.Value}" />
+
+                        <TextBlock Margin="0,8,0,0" Text="新しいパスワード" />
+                        <TextBox Classes="revealPasswordButton"
+                                 PasswordChar="*"
+                                 Text="{Binding NewPassword.Value}" />
+
+                        <Button Margin="0,16,0,0"
+                                Classes="accent"
+                                Command="{Binding UpdatePassword}"
+                                Content="変更" />
+                    </StackPanel>
+                </Expander>
+
+                <TextBlock Margin="0,16,0,0"
+                           Text="危険な項目"
+                           Theme="{StaticResource BodyStrongTextBlockStyle}" />
+
+                <ui:SettingsExpanderItem Content="リセットする"
+                                         Description="保存されているアカウントをすべて削除します。"
+                                         IsClickEnabled="True">
+                    <ui:SettingsExpanderItem.IconSource>
+                        <icons:SymbolIconSource Symbol="ArrowCounterclockwise" />
+                    </ui:SettingsExpanderItem.IconSource>
+                </ui:SettingsExpanderItem>
+            </StackPanel>
+        </Grid>
+    </ScrollViewer>
+</UserControl>

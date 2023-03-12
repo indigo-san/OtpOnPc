@@ -17,12 +17,28 @@ public class App : Application
     public override void RegisterServices()
     {
         base.RegisterServices();
-#if WINDOWS10_0_17763_0_OR_GREATER
 
-        AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<ProtectedStorageTotpRepository>();
+        var settings = new SettingsService();
+        AvaloniaLocator.CurrentMutable.BindToSelf(settings);
+
+        if (settings.Settings.Value.ProtectionMode == DataProtectionMode.Windows_Security_Cryptography_DataProtection_DataProtectionProvider)
+        {
+#if WINDOWS10_0_17763_0_OR_GREATER
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<ProtectedStorageTotpRepository>();
 #else
-        AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<DemoTotpRepository>();
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<InMemoryTotpRepository>();
 #endif
+        }
+        else if (settings.Settings.Value.ProtectionMode == DataProtectionMode.Aes)
+        {
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<AesTotpRepository>();
+        }
+        else
+        {
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<InMemoryTotpRepository>();
+        }
+
+        AvaloniaLocator.CurrentMutable.BindToSelfSingleton<TotpModelManager>();
     }
 
     public override void OnFrameworkInitializationCompleted()

@@ -6,11 +6,18 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="/Styles/LiteNav.axaml" />
+                <ResourceInclude Source="/Styles/SplitButton.axaml" />
+                <ResourceInclude Source="/Styles/ToggleSwitch.axaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
     <Application.Styles>
         <sty:FluentAvaloniaTheme />
         <StyleInclude Source="avares://FluentAvalonia.UI.Windowing/Styles/FAWindowingStyles.axaml" />
+
+        <Style Selector="ToggleSwitch">
+            <Setter Property="OnContent" Value="オン" />
+            <Setter Property="OffContent" Value="オフ" />
+        </Style>
     </Application.Styles>
 </Application>

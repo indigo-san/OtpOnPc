@@ -18,13 +18,13 @@ namespace OtpOnPc.ViewModels;
 
 public class AddAccountPageViewModel
 {
-    private readonly ITotpRepository _totpRepos;
+    private readonly TotpModelManager _totpManager;
 
     private string? _keyError;
 
     public AddAccountPageViewModel()
     {
-        _totpRepos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
+        _totpManager = AvaloniaLocator.Current.GetRequiredService<TotpModelManager>();
         Name.SetValidateNotifyError(v => string.IsNullOrWhiteSpace(v) ? "名前を空白にすることはできません。" : null);
         Key.SetValidateNotifyError(v =>
         {
@@ -79,7 +79,7 @@ public class AddAccountPageViewModel
             return false;
         }
 
-        await _totpRepos.AddItem(new TotpModel(Guid.NewGuid(), key, Name.Value, (OtpHashMode)HashMode.Value, Size.Value));
+        await _totpManager.AddItem(new TotpModel(Guid.NewGuid(), key, Name.Value, (OtpHashMode)HashMode.Value, Size.Value));
         return true;
     }
 }
