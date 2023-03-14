@@ -55,11 +55,6 @@ public sealed class AesTotpRepository : ITotpRepository
 
     public IReadOnlyReactiveProperty<bool> IsPasswordSet => _isPasswordSet;
 
-    private static TotpModel ToModel(AccountInfo info, byte[] secretKey)
-    {
-        return new TotpModel(info.Id, secretKey, info.Name, info.HashMode, info.Size);
-    }
-
     public async Task<TotpModel[]> Restore(byte[] key, bool throwOnError)
     {
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
@@ -112,7 +107,7 @@ public sealed class AesTotpRepository : ITotpRepository
                     }
                 }
 
-                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? ToModel(x, key) : null)
+                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? x.ToModel(key) : null)
                     .Where(x => x != null)
                     .ToArray()!;
             }

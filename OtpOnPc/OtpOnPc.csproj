@@ -10,6 +10,10 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove=".gitignore" />
+    <None Remove="Resources\Images\GitHub.png" />
+    <None Remove="Resources\Images\GitHubWhite.png" />
+    <None Remove="Resources\Images\google.png" />
+    <None Remove="Resources\Images\Microsoft.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.0.0-preview4" />
@@ -25,5 +29,8 @@
     <PackageReference Include="ReactiveProperty" Version="9.0.0" />
     <PackageReference Include="System.Reactive" Version="5.0.0" />
     <PackageReference Include="XamlNameReferenceGenerator" Version="1.6.1" />
-   </ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Resources/Images/*.*" />
+  </ItemGroup>
 </Project>

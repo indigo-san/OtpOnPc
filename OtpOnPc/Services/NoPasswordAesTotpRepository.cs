@@ -35,11 +35,6 @@ public sealed class NoPasswordAesTotpRepository : ITotpRepository
         _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
     }
 
-    private static TotpModel ToModel(AccountInfo info, byte[] secretKey)
-    {
-        return new TotpModel(info.Id, secretKey, info.Name, info.HashMode, info.Size);
-    }
-
     public async Task<TotpModel[]> Restore()
     {
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
@@ -84,7 +79,7 @@ public sealed class NoPasswordAesTotpRepository : ITotpRepository
                     return Array.Empty<TotpModel>();
                 }
 
-                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? ToModel(x, key) : null)
+                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? x.ToModel(key) : null)
                     .Where(x => x != null)
                     .ToArray()!;
             }

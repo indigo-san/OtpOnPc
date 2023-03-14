@@ -29,12 +29,21 @@
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="viewModel:TotpItemViewModel">
                     <Grid ColumnDefinitions="24,16,*,20" RowDefinitions="Auto,*">
-                        <Ellipse Grid.RowSpan="2"
+                        <local:ImageIcon Grid.RowSpan="2"
+                                         Width="32"
+                                         Height="32"
+                                         VerticalAlignment="Center"
+                                         BorderBrush="{DynamicResource TextFillColorPrimaryBrush}"
+                                         ClipToBounds="False"
+                                         FontSize="24"
+                                         IconType="{Binding Model.Value.IconType}"
+                                         InitialChar="{Binding Name.Value[0]}" />
+                        <!--<Ellipse Grid.RowSpan="2"
                                  Width="24"
                                  Height="24"
                                  VerticalAlignment="Center"
                                  Stroke="{DynamicResource TextFillColorPrimaryBrush}"
-                                 StrokeThickness="2" />
+                                 StrokeThickness="2" />-->
 
                         <TextBlock Grid.Column="2"
                                    Margin="0,4,0,0"

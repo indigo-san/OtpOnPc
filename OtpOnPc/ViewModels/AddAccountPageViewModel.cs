@@ -4,6 +4,7 @@ using OtpNet;
 
 using OtpOnPc.Models;
 using OtpOnPc.Services;
+using OtpOnPc.Views;
 
 using Reactive.Bindings;
 
@@ -54,11 +55,24 @@ public class AddAccountPageViewModel
     public ReactiveProperty<string> Key { get; }
         = new(mode: ReactivePropertyMode.IgnoreInitialValidationError | ReactivePropertyMode.DistinctUntilChanged | ReactivePropertyMode.RaiseLatestValueOnSubscribe);
 
+    public ReactiveProperty<int> IconType { get; } = new();
+    
     public ReactiveProperty<int> HashMode { get; } = new();
 
     public ReactiveProperty<int> Size { get; } = new(6);
 
     public ReadOnlyReactivePropertySlim<bool> IsValid { get; }
+
+    private ImageIconType ToIconType()
+    {
+        return IconType.Value switch
+        {
+            0 => ImageIconType.Initial,
+            1 => ImageIconType.Google,
+            2 => ImageIconType.Microsoft,
+            _ => ImageIconType.Manual,
+        };
+    }
 
     public async Task<bool> Add()
     {
@@ -77,7 +91,7 @@ public class AddAccountPageViewModel
             return false;
         }
 
-        await _totpManager.AddItem(new TotpModel(Guid.NewGuid(), key, Name.Value, (OtpHashMode)HashMode.Value, Size.Value));
+        await _totpManager.AddItem(new TotpModel(Guid.NewGuid(), key, Name.Value, (OtpHashMode)HashMode.Value, Size.Value, ToIconType()));
         return true;
     }
 }

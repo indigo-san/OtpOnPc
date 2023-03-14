@@ -85,5 +85,13 @@
             </Style>
         </Style>
 
+        <Style Selector="^:disabled">
+            <Style Selector="^ /template/ ContentPresenter#PART_ContentPresenter">
+                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+            </Style>
+            <Style Selector="^ /template/ Rectangle#PART_SelectedPipe">
+                <Setter Property="Fill" Value="{DynamicResource AccentFillColorDisabledBrush}" />
+            </Style>
+        </Style>
     </ControlTheme>
 </ResourceDictionary>
