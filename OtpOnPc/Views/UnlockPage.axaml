@@ -1,4 +1,4 @@
-<UserControl x:Class="OtpOnPc.Views.SignInPage"
+<UserControl x:Class="OtpOnPc.Views.UnlockPage"
              xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -13,7 +13,7 @@
              d:DesignHeight="450"
              d:DesignWidth="800"
              x:CompileBindings="True"
-             x:DataType="viewModel:SignInPageViewModel"
+             x:DataType="viewModel:UnlockPageViewModel"
              mc:Ignorable="d">
     <Grid Margin="16,8" RowDefinitions="*,*,Auto">
         <StackPanel Grid.Row="0"
@@ -34,7 +34,14 @@
                     VerticalAlignment="Top"
                     Spacing="8">
             <TextBlock Text="パスワード" />
-            <TextBox IsEnabled="{Binding !Varifying.Value}" Text="{Binding Password.Value}" />
+            <TextBox Classes="revealPasswordButton"
+                     IsEnabled="{Binding !Varifying.Value}"
+                     PasswordChar="*"
+                     Text="{Binding Password.Value}" />
+
+            <TextBlock Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                       IsVisible="{Binding ErrorMessage.Value, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       Text="{Binding ErrorMessage.Value}" />
         </StackPanel>
 
         <SplitButton Grid.Row="2"
@@ -46,14 +53,23 @@
                      Command="{Binding Unlock}">
             <SplitButton.Flyout>
                 <ui:FAMenuFlyout>
-                    <ui:RadioMenuFlyoutItem GroupName="CryptoType"
+                    <ui:RadioMenuFlyoutItem x:Name="useAesRadio"
+                                            GroupName="CryptoType"
                                             IsChecked="True"
                                             Text="Aes暗号化を使用" />
-                    <ui:RadioMenuFlyoutItem GroupName="CryptoType" Text="'Windows.Security.Cryptography'を使用" />
-                    <ui:RadioMenuFlyoutItem GroupName="CryptoType" Text="'GNU Privacy Guard'を使用" />
+                    <ui:RadioMenuFlyoutItem Click="UseWSCDClick"
+                                            GroupName="CryptoType"
+                                            IsEnabled="{Binding IsWSCDEnabled}"
+                                            Text="'Windows.Security.Cryptography'を使用" />
+                    <ui:RadioMenuFlyoutItem Click="UseNoPassAesClick"
+                                            GroupName="CryptoType"
+                                            Text="Aes暗号化(パスワードなし)を使用" />
+                    <!--<ui:RadioMenuFlyoutItem GroupName="CryptoType" Text="'GNU Privacy Guard'を使用" />-->
 
                     <ui:MenuFlyoutSeparator />
-                    <ui:MenuFlyoutItem Text="リセットする" />
+                    <ui:MenuFlyoutItem Click="ResetClick"
+                                       IsEnabled="{Binding CanReset.Value}"
+                                       Text="リセットする" />
                 </ui:FAMenuFlyout>
             </SplitButton.Flyout>
             <StackPanel Orientation="Horizontal" Spacing="8">

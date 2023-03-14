@@ -1,9 +1,5 @@
 ﻿#if WINDOWS10_0_17763_0_OR_GREATER
 
-using Nito.AsyncEx;
-
-using OtpNet;
-
 using OtpOnPc.Models;
 
 using System;
@@ -12,6 +8,7 @@ using System.IO;
 using System.IO.IsolatedStorage;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Windows.Security.Cryptography.DataProtection;
@@ -20,11 +17,11 @@ namespace OtpOnPc.Services;
 
 public sealed class ProtectedStorageTotpRepository : ITotpRepository
 {
-    private const string FileName = "wscd\\protected-account.json";
+    private const string FileName = "wscd\\protected-account";
     private const string IndexFileName = "wscd\\account-index.json";
     private const string Directory = "wscd";
     private readonly IsolatedStorageFile _storageFile;
-    private readonly AsyncLock _asyncLock = new();
+    private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
     public ProtectedStorageTotpRepository()
     {
@@ -36,9 +33,24 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
         return new TotpModel(info.Id, secretKey, info.Name, info.HashMode, info.Size);
     }
 
+    public Task Clear()
+    {
+        if (_storageFile.FileExists(FileName))
+            _storageFile.DeleteFile(FileName);
+
+        if (_storageFile.FileExists(IndexFileName))
+            _storageFile.DeleteFile(IndexFileName);
+
+        if (_storageFile.DirectoryExists(Directory))
+            _storageFile.DeleteDirectory(Directory);
+
+        return Task.CompletedTask;
+    }
+
     public async Task<TotpModel[]> Restore()
     {
-        using (await _asyncLock.LockAsync().ConfigureAwait(false))
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
         {
             AccountInfo[]? infos = null;
             if (_storageFile.FileExists(IndexFileName))
@@ -73,11 +85,16 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
 
             return Array.Empty<TotpModel>();
         }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
     }
 
     public async Task Store(IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger)
     {
-        using (await _asyncLock.LockAsync().ConfigureAwait(false))
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
         {
             if (!_storageFile.DirectoryExists(Directory))
             {
@@ -103,6 +120,10 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
 
                 await prov.ProtectStreamAsync(inputStream, outputStream);
             }
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
         }
     }
 }

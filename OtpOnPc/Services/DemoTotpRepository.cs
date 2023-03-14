@@ -18,6 +18,11 @@ public sealed class InMemoryTotpRepository : ITotpRepository
         new(Guid.NewGuid(), KeyGeneration.GenerateRandomKey(20), "ZZZ App"),
     };
 
+    public Task Clear()
+    {
+        return Task.CompletedTask;
+    }
+
     public Task<TotpModel[]> Restore()
     {
         return Task.FromResult(_items);

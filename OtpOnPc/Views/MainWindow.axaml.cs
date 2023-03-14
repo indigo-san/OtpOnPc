@@ -1,31 +1,29 @@
 using Avalonia;
-using Avalonia.Controls;
 
 using FluentAvalonia.UI.Controls;
 using FluentAvalonia.UI.Windowing;
 
+using OtpOnPc.Services;
 using OtpOnPc.ViewModels;
 
 using System;
-using System.Linq;
 using System.Reactive.Linq;
 
-using SymbolIcon = FluentIcons.FluentAvalonia.SymbolIcon;
 using Symbol = FluentIcons.Common.Symbol;
-using OtpOnPc.Services;
-using System.Threading.Tasks;
+using SymbolIcon = FluentIcons.FluentAvalonia.SymbolIcon;
 
 namespace OtpOnPc.Views;
 
 public partial class MainWindow : AppWindow
 {
     private readonly NavigationViewItem[] _items;
-    private readonly MainPageViewModel _mainPageViewModel = new();
     private readonly SettingsPageViewModel _settingsPageViewModel = new();
     private readonly SettingsService _settings;
+    private readonly MainPageViewModel _mainPageViewModel;
 
     public MainWindow()
     {
+        _mainPageViewModel = new MainPageViewModel();
         InitializeComponent();
 #if DEBUG
         this.AttachDevTools();
@@ -55,13 +53,11 @@ public partial class MainWindow : AppWindow
         navigation.MenuItems = _items;
         navigation.SelectedItem = _items[0];
         _settings = AvaloniaLocator.Current.GetRequiredService<SettingsService>();
-        
-        if (_settings.Settings.Value.ProtectionMode == DataProtectionMode.Aes)
+        var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
+
+        if (repos is AesTotpRepository aesRepos)
         {
-            if (_settings.IsPasswordSet.Value)
-            {
-                ShowSignInScreen(s => Task.FromResult(_settings.CheckPassword(s)));
-            }
+            ShowUnlockScreen(aesRepos);
         }
         else
         {
@@ -74,6 +70,13 @@ public partial class MainWindow : AppWindow
     protected override async void OnInitialized()
     {
         base.OnInitialized();
+        var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
+        if (repos is not AesTotpRepository)
+        {
+            var unlockScreen = AvaloniaLocator.Current.GetRequiredService<IUnlockNotifier>();
+            unlockScreen.NotifyUnlocked(await repos.Restore());
+        }
+
         await _mainPageViewModel._initializeTask;
     }
 
@@ -103,14 +106,19 @@ public partial class MainWindow : AppWindow
         navigation.SelectedItem = _items[0];
     }
 
-    public void ShowSignInScreen(Func<string, Task<bool>> verify)
+    public async void ShowUnlockScreen(AesTotpRepository repos)
     {
-        var viewModel = new SignInPageViewModel(verify);
-        Content = new SignInPage
+        var unlockScreen = AvaloniaLocator.Current.GetRequiredService<IUnlockScreen>();
+        var viewModel = new UnlockPageViewModel(repos);
+        Content = new UnlockPage
         {
             DataContext = viewModel
         };
 
-        viewModel.SignedIn += (_, _) => Content = navigation;
+        await unlockScreen.WaitUnlocked();
+
+        Content = navigation;
+
+        frame.Navigate(typeof(MainPage), _mainPageViewModel);
     }
 }

@@ -1,7 +1,5 @@
 ﻿using Avalonia;
 
-using Nito.AsyncEx;
-
 using OtpOnPc.Models;
 
 using System;
@@ -16,13 +14,13 @@ public sealed class TotpModelManager
 {
     private readonly Task _initTask;
     private readonly List<TotpModel> _items = new();
-    private readonly AsyncLock _asyncLock = new();
+    private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
     public TotpModelManager()
     {
         async Task Init()
         {
-            var items = await AvaloniaLocator.Current.GetRequiredService<ITotpRepository>().Restore();
+            var items = await AvaloniaLocator.Current.GetRequiredService<IUnlockScreen>().WaitUnlocked().ConfigureAwait(false);
             _items.AddRange(items);
         }
 
@@ -44,7 +42,8 @@ public sealed class TotpModelManager
 
     public async Task AddItem(TotpModel item)
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync();
+        try
         {
             await _initTask;
 
@@ -52,11 +51,16 @@ public sealed class TotpModelManager
             await Save(RepositoryStoreTrigger.OnAdded);
             Added?.Invoke(this, item);
         }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
     }
 
     public async Task DeleteItem(Guid id)
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync();
+        try
         {
             await _initTask;
 
@@ -67,30 +71,45 @@ public sealed class TotpModelManager
                 Deleted?.Invoke(this, model);
             }
         }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
     }
 
     public async Task<TotpModel?> FindItem(Guid id)
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await _initTask;
+            await _initTask.ConfigureAwait(false);
 
             return _items.FirstOrDefault(o => o.Id == id);
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
         }
     }
 
     public async Task<IEnumerable<TotpModel>> GetItems()
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        try
         {
-            await _initTask;
+            await _initTask.ConfigureAwait(false);
             return _items;
+        }
+        finally
+        {
+            _semaphoreSlim.Release();
         }
     }
 
     public async Task UpdateItem(TotpModel item)
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync();
+        try
         {
             await _initTask;
 
@@ -102,11 +121,16 @@ public sealed class TotpModelManager
                 Updated?.Invoke(this, item);
             }
         }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
     }
 
     public async Task Move(int oldIndex, int newIndex)
     {
-        using (await _asyncLock.LockAsync())
+        await _semaphoreSlim.WaitAsync();
+        try
         {
             await _initTask;
 
@@ -120,5 +144,21 @@ public sealed class TotpModelManager
                 Moved?.Invoke(this, (oldIndex, newIndex));
             }
         }
+        finally
+        {
+            _semaphoreSlim.Release();
+        }
+    }
+
+    public async Task Reset()
+    {
+        for (int i = _items.Count - 1; i >= 0; i--)
+        {
+            TotpModel? item = _items[i];
+            _items.RemoveAt(i);
+            Deleted?.Invoke(this, item);
+        }
+
+        await AvaloniaLocator.Current.GetRequiredService<ITotpRepository>().Clear().ConfigureAwait(false);
     }
 }

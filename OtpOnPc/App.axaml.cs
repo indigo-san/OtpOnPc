@@ -17,6 +17,10 @@ public class App : Application
     public override void RegisterServices()
     {
         base.RegisterServices();
+        var unlockScreen = new UnlockScreen();
+        AvaloniaLocator.CurrentMutable
+            .Bind<IUnlockScreen>().ToConstant(unlockScreen)
+            .Bind<IUnlockNotifier>().ToConstant(unlockScreen);
 
         var settings = new SettingsService();
         AvaloniaLocator.CurrentMutable.BindToSelf(settings);
@@ -32,6 +36,10 @@ public class App : Application
         else if (settings.Settings.Value.ProtectionMode == DataProtectionMode.Aes)
         {
             AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<AesTotpRepository>();
+        }
+        else if (settings.Settings.Value.ProtectionMode == DataProtectionMode.NoPasswordAes)
+        {
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToSingleton<NoPasswordAesTotpRepository>();
         }
         else
         {

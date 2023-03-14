@@ -18,4 +18,6 @@ public interface ITotpRepository
     Task<TotpModel[]> Restore();
 
     Task Store(IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger);
+
+    Task Clear();
 }

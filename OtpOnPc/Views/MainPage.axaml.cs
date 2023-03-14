@@ -1,17 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Generators;
-using Avalonia.Controls.Notifications;
-using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
-using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Layout;
 using Avalonia.LogicalTree;
-using Avalonia.Markup.Xaml.MarkupExtensions;
-using Avalonia.Media.Transformation;
-using Avalonia.Platform;
 using Avalonia.Rendering;
 using Avalonia.Xaml.Interactivity;
 
@@ -21,8 +14,6 @@ using FluentAvalonia.UI.Navigation;
 using OtpOnPc.ViewModels;
 
 using System;
-using System.Collections;
-using System.Diagnostics;
 
 #if WINDOWS10_0_17763_0_OR_GREATER
 using Windows.Security.Credentials.UI;
@@ -93,11 +84,13 @@ public partial class MainPage : UserControl
                 XamlRoot = VisualRoot,
                 Title = "確認",
                 Header = "このアカウントを削除します。",
-                Content = $"「{itemViewModel.Name.Value}」を削除します。\n" +
-                          $"この操作を実行すると認証コードの生成は止まりますが、\n" +
-                          $"アカウントの二段階認証は無効になりません。\n" +
-                          $"操作を実行する前にアカウントの二段階認証が\n" +
-                          $"無効化されていることを確認してください。",
+                Content = $"""
+                    {itemViewModel.Name.Value}」を削除します。
+                    この操作を実行すると認証コードの生成は止まりますが、
+                    アカウントの二段階認証は無効になりません。
+                    操作を実行する前にアカウントの二段階認証が
+                    無効化されていることを確認してください。
+                    """,
                 Buttons =
                 {
                     new TaskDialogButton("削除する", true),

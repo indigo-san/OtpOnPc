@@ -28,7 +28,7 @@ public class TotpItemViewModel
     public ReadOnlyReactivePropertySlim<string> Name { get; }
 
     public ReactivePropertySlim<string> Code { get; } = new();
-    
+
     public ReactivePropertySlim<string> OriginalCode { get; } = new();
 
     public void UpdateCode()

@@ -1,7 +1,7 @@
 using Avalonia;
-using Avalonia.Layout;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 
 using FluentAvalonia.UI.Controls;
@@ -23,6 +23,11 @@ public partial class SettingsPage : UserControl
         Resources["SettingsPage_TextBox_HorizontalAlignment"] = HorizontalAlignment.Stretch;
         InitializeComponent();
         AddHandler(Frame.NavigatedToEvent, OnNavigatedTo, RoutingStrategies.Direct);
+    }
+
+    private async void ResetClick(object? sender, RoutedEventArgs e)
+    {
+        await new ResetDialog(VisualRoot).ShowAsync();
     }
 
     private void OnNavigatedTo(object? sender, NavigationEventArgs e)

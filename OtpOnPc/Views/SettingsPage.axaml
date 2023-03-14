@@ -28,9 +28,24 @@
                        Text="設定"
                        Theme="{StaticResource SubtitleTextBlockStyle}" />
 
+            <Button HorizontalAlignment="Right"
+                    VerticalAlignment="Stretch"
+                    Command="{Binding Save}"
+                    Theme="{StaticResource TransparentButton}">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ui:SymbolIcon FontSize="16" Symbol="Save" />
+                    <TextBlock Text="保存" />
+                </StackPanel>
+            </Button>
+
             <StackPanel Grid.Row="4"
                         Margin="0,8,0,0"
                         Spacing="4">
+
+                <TextBlock Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                           IsVisible="{Binding ErrorMessage.Value, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Text="{Binding ErrorMessage.Value}" />
+
                 <ui:SettingsExpanderItem Content="暗号化方法" Description="暗号化方法を設定します。">
                     <ui:SettingsExpanderItem.IconSource>
                         <icons:SymbolIconSource Symbol="LockShield" />
@@ -41,19 +56,58 @@
                     <ui:SettingsExpanderItem.Footer>
                         <ComboBox MinWidth="200"
                                   HorizontalAlignment="Right"
+                                  AutoScrollToSelectedItem="False"
                                   SelectedIndex="{Binding EncryptionMethod.Value}">
                             <ComboBoxItem Content="Windows.Security.Cryptography.DataProtection" IsEnabled="{Binding IsWSCDEnabled}" />
                             <ComboBoxItem Content="Aes暗号化" />
-                            <ComboBoxItem Content="GNU Privacy Guard" />
+                            <ComboBoxItem Content="Aes暗号化 (パスワードなし)" />
+                            <!--<ComboBoxItem Content="GNU Privacy Guard" />-->
                         </ComboBox>
                     </ui:SettingsExpanderItem.Footer>
                 </ui:SettingsExpanderItem>
+
+                <ui:SettingsExpanderItem Content="ロック解除画面でのリセットを有効化"
+                                         Description="ロック解除画面でリセットをできるようにします。"
+                                         IsVisible="{Binding IsAesSelected.Value}">
+                    <ui:SettingsExpanderItem.IconSource>
+                        <icons:SymbolIconSource Symbol="ArrowCounterclockwiseDashes" />
+                    </ui:SettingsExpanderItem.IconSource>
+                    <ui:SettingsExpanderItem.Resources>
+                        <Thickness x:Key="SettingsExpanderItemBottomFooterMargin">42,12,16,0</Thickness>
+                    </ui:SettingsExpanderItem.Resources>
+                    <ui:SettingsExpanderItem.Footer>
+                        <ToggleSwitch HorizontalAlignment="Right"
+                                      Classes="left"
+                                      IsChecked="{Binding CanResetOnUnlockScreen.Value}"
+                                      Theme="{StaticResource CompactToggleSwitchStyle}" />
+                    </ui:SettingsExpanderItem.Footer>
+                </ui:SettingsExpanderItem>
+
+                <ui:SettingsExpanderItem Content="パスワードを設定"
+                                         Description="パスワードを設定"
+                                         IsVisible="{Binding SelectedAndNotUsedAes.Value}">
+                    <ui:SettingsExpanderItem.IconSource>
+                        <icons:SymbolIconSource Symbol="Password" />
+                    </ui:SettingsExpanderItem.IconSource>
+                    <ui:SettingsExpanderItem.Resources>
+                        <Thickness x:Key="SettingsExpanderItemBottomFooterMargin">42,12,16,0</Thickness>
+                    </ui:SettingsExpanderItem.Resources>
+                    <ui:SettingsExpanderItem.Footer>
+                        <TextBox MinWidth="200"
+                                 HorizontalAlignment="Right"
+                                 Classes="revealPasswordButton"
+                                 PasswordChar="*"
+                                 Text="{Binding NewPassword.Value}" />
+                    </ui:SettingsExpanderItem.Footer>
+                </ui:SettingsExpanderItem>
+
                 <Expander MinHeight="{DynamicResource SettingsExpanderMinHeight}"
                           Padding="{DynamicResource SettingsExpanderPadding}"
                           Background="{DynamicResource ExpanderBackground}"
                           BorderBrush="{DynamicResource ExpanderHeaderBorderBrush}"
                           BorderThickness="{DynamicResource ExpanderHeaderBorderThickness}"
                           CornerRadius="{DynamicResource ControlCornerRadius}"
+                          IsVisible="{Binding UsingAes.Value}"
                           Theme="{StaticResource SettingsExpanderExpanderStyle}">
                     <Expander.ContentTransition>
                         <CrossFade Duration="00:00:00.25" />
@@ -77,9 +131,8 @@
                                 <Setter Property="HorizontalAlignment" Value="{DynamicResource SettingsPage_TextBox_HorizontalAlignment}" />
                             </Style>
                         </StackPanel.Styles>
-                        <TextBlock IsVisible="{Binding IsPasswordSet.Value}" Text="古いパスワード" />
+                        <TextBlock Text="古いパスワード" />
                         <TextBox Classes="revealPasswordButton"
-                                 IsVisible="{Binding IsPasswordSet.Value}"
                                  PasswordChar="*"
                                  Text="{Binding OldPassword.Value}" />
 
@@ -87,11 +140,6 @@
                         <TextBox Classes="revealPasswordButton"
                                  PasswordChar="*"
                                  Text="{Binding NewPassword.Value}" />
-
-                        <Button Margin="0,16,0,0"
-                                Classes="accent"
-                                Command="{Binding UpdatePassword}"
-                                Content="変更" />
                     </StackPanel>
                 </Expander>
 
@@ -99,8 +147,9 @@
                            Text="危険な項目"
                            Theme="{StaticResource BodyStrongTextBlockStyle}" />
 
-                <ui:SettingsExpanderItem Content="リセットする"
-                                         Description="保存されているアカウントをすべて削除します。"
+                <ui:SettingsExpanderItem Click="ResetClick"
+                                         Content="リセットする"
+                                         Description="保存されているアカウント、設定を初期化します。"
                                          IsClickEnabled="True">
                     <ui:SettingsExpanderItem.IconSource>
                         <icons:SymbolIconSource Symbol="ArrowCounterclockwise" />

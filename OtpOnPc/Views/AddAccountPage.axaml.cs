@@ -1,15 +1,15 @@
-using System;
-
 using Avalonia;
-using Avalonia.Layout;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 
 using FluentAvalonia.UI.Controls;
 using FluentAvalonia.UI.Navigation;
 
 using OtpOnPc.ViewModels;
+
+using System;
 
 namespace OtpOnPc.Views;
 
