@@ -7,7 +7,9 @@ using Reactive.Bindings;
 using Reactive.Bindings.TinyLinq;
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -16,6 +18,7 @@ namespace OtpOnPc.ViewModels;
 public class MainPageViewModel
 {
     private readonly TotpModelManager _totpManager;
+    private readonly Dictionary<int, StepManager> _steps = new();
     private CancellationTokenSource? _cts;
     internal readonly Task _initializeTask;
 
@@ -58,7 +61,7 @@ public class MainPageViewModel
     {
         foreach (var item in await _totpManager.GetItems())
         {
-            Items.Add(new TotpItemViewModel(item));
+            OnTotpReposAdded(null, item);
         }
     }
 
@@ -70,9 +73,17 @@ public class MainPageViewModel
 
     public void UpdateCode()
     {
-        foreach (var item in Items)
+        foreach (var item in _steps.Values)
         {
             item.UpdateCode();
+        }
+    }
+
+    public void UpdateSweepAngle(long unixTime)
+    {
+        foreach (var item in _steps.Values)
+        {
+            item.UpdateSweepAngle(unixTime);
         }
     }
 
@@ -87,12 +98,47 @@ public class MainPageViewModel
         if (viewModel != null)
         {
             Items.Remove(viewModel);
+
+            RemoveStep(e.Step, viewModel);
+            viewModel.StepChanged -= OnItemStepChanged;
+            viewModel.Dispose();
         }
     }
 
     private void OnTotpReposAdded(object? sender, TotpModel e)
     {
-        Items.Add(new TotpItemViewModel(e));
+        var viewModel = new TotpItemViewModel(e);
+        Items.Add(viewModel);
+
+        AddStep(e.Step, viewModel);
+        viewModel.StepChanged += OnItemStepChanged;
+    }
+
+    private void OnItemStepChanged(object? sender, (int OldStep, int NewStep) e)
+    {
+        if (sender is TotpItemViewModel viewModel)
+        {
+            RemoveStep(e.OldStep, viewModel);
+            AddStep(e.NewStep, viewModel);
+        }
+    }
+
+    private void AddStep(int step, TotpItemViewModel viewModel)
+    {
+        FindOrAddStepManager(step).AddItem(viewModel);
+    }
+
+    private void RemoveStep(int step, TotpItemViewModel viewModel)
+    {
+        FindOrAddStepManager(step).RemoveItem(viewModel);
+    }
+
+    private StepManager FindOrAddStepManager(int step)
+    {
+        ref var value = ref CollectionsMarshal.GetValueRefOrAddDefault(_steps, step, out _);
+        value ??= new StepManager(step);
+
+        return value;
     }
 
     private void OnTotpReposUpdated(object? sender, TotpModel e)

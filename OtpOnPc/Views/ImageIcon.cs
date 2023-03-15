@@ -15,7 +15,7 @@ namespace OtpOnPc.Views;
 public enum ImageIconType
 {
     Initial,
-    Manual,
+    //Manual,
     Google,
     Microsoft,
     GitHub,
@@ -98,9 +98,9 @@ public class ImageIcon : TemplatedControl
                 context.DrawRectangle(null, _pen, lineRect, lineRect.Width / 2, lineRect.Height / 2);
                 break;
 
-            case ImageIconType.Manual:
-                bitmap = ProvideBitmap(Source);
-                break;
+            //case ImageIconType.Manual:
+            //    bitmap = ProvideBitmap(Source);
+            //    break;
 
             case ImageIconType.Google or ImageIconType.Microsoft or ImageIconType.GitHub:
                 var url = ToResourceUri(IconType);

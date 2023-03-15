@@ -7,7 +7,7 @@
         xmlns:ui="using:FluentAvalonia.UI.Controls"
         xmlns:wnd="clr-namespace:FluentAvalonia.UI.Windowing;assembly=FluentAvalonia.UI.Windowing"
         Title="OtpOnPc"
-        Width="300"
+        Width="320"
         Height="420"
         MinWidth="300"
         MinHeight="300"

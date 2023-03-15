@@ -65,9 +65,7 @@
                                 Margin="0,0,0,4"
                                 Fill="{DynamicResource AccentTextFillColorPrimaryBrush}"
                                 StartAngle="-90"
-                                SweepAngle="{ReflectionBinding SweepAngle,
-                                                               RelativeSource={RelativeSource AncestorType={x:Type local:MainPage},
-                                                                                              Mode=FindAncestor}}" />
+                                SweepAngle="{Binding SweepAngle.Value}" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

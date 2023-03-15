@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Generators;
-using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
@@ -23,10 +22,8 @@ namespace OtpOnPc.Views;
 
 public partial class MainPage : UserControl
 {
-    public static readonly StyledProperty<double> SweepAngleProperty = Sector.SweepAngleProperty.AddOwner<MainPage>();
     private readonly UiThreadRenderTimer _renderTimer;
     private readonly FAMenuFlyout _menuFlyout;
-    private long? _prevRemain;
 
     public MainPage()
     {
@@ -57,12 +54,6 @@ public partial class MainPage : UserControl
 
         listBox.ItemContainerGenerator.Materialized += OnItemContainerGeneratorMaterialized;
         listBox.ItemContainerGenerator.Dematerialized += OnItemContainerGeneratorDematerialized;
-    }
-
-    public double SweepAngle
-    {
-        get => GetValue(SweepAngleProperty);
-        set => SetValue(SweepAngleProperty, value);
     }
 
     private void CopyMenuItem_Click(object? sender, RoutedEventArgs e)
@@ -142,23 +133,10 @@ public partial class MainPage : UserControl
     private void OnRenderTimerTick(TimeSpan obj)
     {
         var unixTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var remain = unixTime % 30000;
-        var p = remain / 30000d;
-        p = 1 - p;
-
-        SweepAngle = -(p * 360);
-
-        if (_prevRemain.HasValue)
+        if (DataContext is MainPageViewModel viewModel)
         {
-            if (_prevRemain.Value > remain)
-            {
-                if (DataContext is MainPageViewModel viewModel)
-                {
-                    viewModel.UpdateCode();
-                }
-            }
+            viewModel.UpdateSweepAngle(unixTime);
         }
-        _prevRemain = remain;
     }
 
     private void OnNavigatedTo(object? sender, NavigationEventArgs e)

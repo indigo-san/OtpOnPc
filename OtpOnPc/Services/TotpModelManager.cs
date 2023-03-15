@@ -64,7 +64,7 @@ public sealed class TotpModelManager
         {
             await _initTask;
 
-            if (await FindItem(id) is { } model)
+            if (_items.FirstOrDefault(o => o.Id == id) is { } model)
             {
                 _items.Remove(model);
                 await Save(RepositoryStoreTrigger.OnDeleted);

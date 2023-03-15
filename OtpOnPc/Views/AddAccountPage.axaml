@@ -48,7 +48,7 @@
                     </Style>
                 </StackPanel.Styles>
                 <TextBlock Text="名前" />
-                <TextBox Text="{Binding Name.Value}" />
+                <TextBox InputMethod.IsInputMethodEnabled="True" Text="{Binding Name.Value}" />
 
                 <TextBlock Margin="0,8,0,0" Text="キー" />
                 <TextBox Text="{Binding Key.Value}" />
@@ -56,7 +56,7 @@
                 <Expander Margin="0,16,0,0"
                           Header="ロゴ"
                           IsExpanded="True">
-                    <ListBox>
+                    <ListBox SelectedIndex="{Binding IconType.Value}">
                         <ListBox.ItemContainerTheme>
                             <ControlTheme BasedOn="{StaticResource ResourceKey={x:Type ListBoxItem}}" TargetType="ListBoxItem">
                                 <Setter Property="MinWidth" Value="60" />
@@ -121,7 +121,7 @@
                             </Style>
                         </ListBox.Styles>
                         <ListBoxItem Tag="{x:Static local:ImageIconType.Initial}">
-                            <local:ImageIcon IconType="{Binding $parent.Tag}" InitialChar="{Binding Name.Value[0]}" />
+                            <local:ImageIcon IconType="{Binding $parent.Tag}" InitialChar="{Binding InitialChar.Value}" />
                         </ListBoxItem>
                         <ListBoxItem Tag="{x:Static local:ImageIconType.Google}">
                             <local:ImageIcon IconType="{Binding $parent.Tag}" />
@@ -135,7 +135,14 @@
                     </ListBox>
                 </Expander>
 
-                <TextBlock Margin="0,16,0,0" Text="ハッシュアルゴリズム" />
+                <TextBlock Margin="0,16,0,0" Text="更新間隔（秒）" />
+                <NumericUpDown FormatString="F0"
+                               Minimum="1"
+                               ParsingNumberStyle="Integer"
+                               ShowButtonSpinner="False"
+                               Value="{Binding Step.Value}" />
+
+                <TextBlock Margin="0,8,0,0" Text="ハッシュアルゴリズム" />
                 <ComboBox AutoScrollToSelectedItem="False" SelectedIndex="{Binding HashMode.Value}">
                     <ComboBoxItem Content="SHA1" />
                     <ComboBoxItem Content="SHA256" />
