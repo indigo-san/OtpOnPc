@@ -1,8 +1,8 @@
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 using FluentAvalonia.UI.Controls;
 using FluentAvalonia.UI.Windowing;
-
 using OtpOnPc.Models;
 using OtpOnPc.Services;
 using OtpOnPc.ViewModels;
@@ -74,8 +74,19 @@ public partial class MainWindow : AppWindow
         var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
         if (repos is not AesTotpRepository)
         {
-            var unlockScreen = AvaloniaLocator.Current.GetRequiredService<IUnlockNotifier>();
-            unlockScreen.NotifyUnlocked(await repos.Restore());
+            try
+            {
+                var unlockScreen = AvaloniaLocator.Current.GetRequiredService<IUnlockNotifier>();
+                unlockScreen.NotifyUnlocked(await repos.Restore());
+            }
+            catch (Exception ex)
+            {
+                if (await ExceptionDialog.Handle(ex) == ExceptionDialogResult.Shutdown)
+                {
+                    var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+                    lifetime?.Shutdown((int)ExitCodes.FailedToRestore);
+                }
+            }
         }
 
         await _mainPageViewModel._initializeTask;
@@ -106,7 +117,7 @@ public partial class MainWindow : AppWindow
         frame.Navigate(typeof(MainPage), _mainPageViewModel);
         navigation.SelectedItem = _items[0];
     }
-    
+
     //public void NavigateToEditPage(TotpModel model)
     //{
     //    frame.Navigate(typeof(EditAccountPage), new EditAccountPageViewModel(model));

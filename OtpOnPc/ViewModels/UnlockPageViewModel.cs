@@ -61,14 +61,14 @@ public class UnlockPageViewModel
         {
             Varifying.Value = true;
             var items = await _repos.Unlock(Password.Value);
-            if (items != null)
-            {
-                _unlockNotifier.NotifyUnlocked(items);
-            }
-            else
-            {
-                ErrorMessage.Value = "パスワードが違います";
-            }
+            _unlockNotifier.NotifyUnlocked(items);
+        }
+        catch
+        {
+            ErrorMessage.Value = """
+                復元できませんでした。
+                パスワードが違う可能性があります。
+                """;
         }
         finally
         {
@@ -78,18 +78,25 @@ public class UnlockPageViewModel
 
     public async Task UseNoPasswordAes()
     {
-        AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>()
-            .ToSingleton<NoPasswordAesTotpRepository>();
-
-        var settings = AvaloniaLocator.Current.GetRequiredService<SettingsService>();
-        var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-        settings.Settings.Value = settings.Settings.Value with
+        try
         {
-            ProtectionMode = DataProtectionMode.NoPasswordAes
-        };
+            var settings = AvaloniaLocator.Current.GetRequiredService<SettingsService>();
+            var repos = new NoPasswordAesTotpRepository();
+            var items = await repos.Restore();
 
-        var items = await repos.Restore();
-        _unlockNotifier.NotifyUnlocked(items);
+            // この時点で復元が成功しているので設定を変更する。
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToConstant(repos);
+            settings.Settings.Value = settings.Settings.Value with
+            {
+                ProtectionMode = DataProtectionMode.NoPasswordAes
+            };
+
+            _unlockNotifier.NotifyUnlocked(items);
+        }
+        catch
+        {
+            ErrorMessage.Value = "復元できませんでした。";
+        }
     }
 
     public
@@ -99,18 +106,24 @@ public class UnlockPageViewModel
         Task UseWSCD()
     {
 #if WINDOWS10_0_17763_0_OR_GREATER
-        AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>()
-            .ToSingleton<ProtectedStorageTotpRepository>();
-
-        var settings = AvaloniaLocator.Current.GetRequiredService<SettingsService>();
-        var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-        settings.Settings.Value = settings.Settings.Value with
+        try
         {
-            ProtectionMode = DataProtectionMode.Windows_Security_Cryptography_DataProtection_DataProtectionProvider
-        };
+            var settings = AvaloniaLocator.Current.GetRequiredService<SettingsService>();
+            var repos = new ProtectedStorageTotpRepository();
+            var items = await repos.Restore();
 
-        var items = await repos.Restore();
-        _unlockNotifier.NotifyUnlocked(items);
+            AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>().ToConstant(repos);
+            settings.Settings.Value = settings.Settings.Value with
+            {
+                ProtectionMode = DataProtectionMode.Windows_Security_Cryptography_DataProtection_DataProtectionProvider
+            };
+
+            _unlockNotifier.NotifyUnlocked(items);
+        }
+        catch
+        {
+            ErrorMessage.Value = "復元できませんでした。";
+        }
 #else
         return Task.CompletedTask;
 #endif

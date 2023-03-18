@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 using Microsoft.AspNetCore.DataProtection;
 
@@ -95,19 +96,32 @@ public class AddAccountPageViewModel
         if (!IsValid.Value)
             return false;
 
-        var dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
+        try
+        {
+            var dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
 
-        var model = new TotpModel(
-            Guid.NewGuid(),
-            dataProtector.Protect(key),
-            Name.Value,
-            (OtpHashMode)HashMode.Value,
-            Size.Value,
-            IconType.Value,
-            Step.Value);
-        Random.Shared.NextBytes(key);
+            var model = new TotpModel(
+                Guid.NewGuid(),
+                dataProtector.Protect(key),
+                Name.Value,
+                (OtpHashMode)HashMode.Value,
+                Size.Value,
+                IconType.Value,
+                Step.Value);
+            Random.Shared.NextBytes(key);
 
-        await _totpManager.AddItem(model);
-        return true;
+            await _totpManager.AddItem(model);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            if (await ExceptionDialog.Handle(ex) == ExceptionDialogResult.Shutdown)
+            {
+                var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+                lifetime?.Shutdown((int)ExitCodes.FailedToAddAccount);
+            }
+
+            return false;
+        }
     }
 }

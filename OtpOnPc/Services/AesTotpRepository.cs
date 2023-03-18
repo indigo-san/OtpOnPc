@@ -43,14 +43,8 @@ public sealed class AesTotpRepository : IsolatedStorageRepository, ITotpReposito
         _secretpath = Path.Combine(_directoryPath, SecretFileName);
         if (File.Exists(_secretpath))
         {
-            try
-            {
-                _salt = File.ReadAllBytes(_secretpath);
-                _isPasswordSet.Value = true;
-            }
-            catch
-            {
-            }
+            _salt = File.ReadAllBytes(_secretpath);
+            _isPasswordSet.Value = true;
         }
     }
 
@@ -199,10 +193,10 @@ public sealed class AesTotpRepository : IsolatedStorageRepository, ITotpReposito
         return result;
     }
 
-    public async Task<TotpModel[]?> Unlock(string password)
+    public async Task<TotpModel[]> Unlock(string password)
     {
         if (_salt == null)
-            return null;
+            throw new Exception("Salt does not exist.");
 
         byte[] hash = GenHash(password, _salt);
 

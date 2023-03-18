@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 using Microsoft.AspNetCore.DataProtection;
 
@@ -156,11 +157,33 @@ public class MainPageViewModel
 
     public async Task MoveItem(int oldIndex, int newIndex)
     {
-        await _totpManager.Move(oldIndex, newIndex);
+        try
+        {
+            await _totpManager.Move(oldIndex, newIndex);
+        }
+        catch (Exception ex)
+        {
+            if (await ExceptionDialog.Handle(ex) == ExceptionDialogResult.Shutdown)
+            {
+                var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+                lifetime?.Shutdown((int)ExitCodes.FailedToMoveAccount);
+            }
+        }
     }
 
     public async Task DeleteItem(TotpItemViewModel item)
     {
-        await _totpManager.DeleteItem(item.Model.Value.Id);
+        try
+        {
+            await _totpManager.DeleteItem(item.Model.Value.Id);
+        }
+        catch (Exception ex)
+        {
+            if (await ExceptionDialog.Handle(ex) == ExceptionDialogResult.Shutdown)
+            {
+                var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+                lifetime?.Shutdown((int)ExitCodes.FailedToDeleteAccount);
+            }
+        }
     }
 }

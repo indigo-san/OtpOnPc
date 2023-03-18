@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 
 using OtpOnPc.Services;
 
@@ -95,13 +96,13 @@ public sealed class SettingsPageViewModel : IDisposable
         if (mode != settings.ProtectionMode)
         {
             var oldrepos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-            var helper = AvaloniaLocator.CurrentMutable.Bind<ITotpRepository>();
+            ITotpRepository? newrepos = null;
             bool result = false;
             switch (mode)
             {
                 case DataProtectionMode.Windows_Security_Cryptography_DataProtection_DataProtectionProvider:
 #if WINDOWS10_0_17763_0_OR_GREATER
-                    helper.ToSingleton<ProtectedStorageTotpRepository>();
+                    newrepos = new ProtectedStorageTotpRepository();
                     result = true;
 #endif
                     break;
@@ -112,17 +113,13 @@ public sealed class SettingsPageViewModel : IDisposable
                         return false;
                     }
 
-                    helper.ToSingleton<AesTotpRepository>();
-                    var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-                    if (repos is AesTotpRepository aesRepos)
-                    {
-                        await aesRepos.UpdatePassword(null, NewPassword.Value);
-                        NewPassword.Value = "";
-                    }
+                    newrepos = new AesTotpRepository();
+                    await ((AesTotpRepository)newrepos).UpdatePassword(null, NewPassword.Value);
+                    NewPassword.Value = "";
                     result = true;
                     break;
                 case DataProtectionMode.NoPasswordAes:
-                    helper.ToSingleton<NoPasswordAesTotpRepository>();
+                    newrepos = new NoPasswordAesTotpRepository();
                     result = true;
                     break;
                 case DataProtectionMode.GNUPrivacyGuard:
@@ -131,19 +128,32 @@ public sealed class SettingsPageViewModel : IDisposable
                     break;
             }
 
-            if (result)
+            if (result && newrepos != null)
             {
-                var manager = AvaloniaLocator.Current.GetRequiredService<TotpModelManager>();
-                var repos = AvaloniaLocator.Current.GetRequiredService<ITotpRepository>();
-                _repository.Value = repos;
-                _settings.Settings.Value = settings with
+                try
                 {
-                    ProtectionMode = mode
-                };
+                    var manager = AvaloniaLocator.Current.GetRequiredService<TotpModelManager>();
+                    var items = await manager.GetItems();
+                    await newrepos.Store(items, RepositoryStoreTrigger.OnAdded);
+                    await oldrepos.Clear();
 
-                var items = await manager.GetItems();
-                await repos.Store(items, RepositoryStoreTrigger.OnAdded);
-                await oldrepos.Clear();
+                    AvaloniaLocator.CurrentMutable.BindToSelf(newrepos);
+                    _repository.Value = newrepos;
+                    _settings.Settings.Value = settings with
+                    {
+                        ProtectionMode = mode
+                    };
+                }
+                catch (Exception ex)
+                {
+                    if (await ExceptionDialog.Handle(ex) == ExceptionDialogResult.Shutdown)
+                    {
+                        var lifetime = Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
+                        lifetime?.Shutdown((int)ExitCodes.FailedToChangeRepository);
+                    }
+
+                    return false;
+                }
             }
         }
 
