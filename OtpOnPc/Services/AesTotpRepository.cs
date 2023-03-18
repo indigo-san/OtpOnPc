@@ -20,7 +20,7 @@ using System.Threading.Tasks;
 
 namespace OtpOnPc.Services;
 
-public sealed class AesTotpRepository : ITotpRepository
+public sealed class AesTotpRepository : IsolatedStorageRepository, ITotpRepository
 {
     private const string FileName = "aes\\protected-account";
     private const string IndexFileName = "aes\\account-index.json";
@@ -28,7 +28,6 @@ public sealed class AesTotpRepository : ITotpRepository
     private const string SecretFileName = "salt";
 
     private static readonly byte[] s_dummy = new byte[16];
-    private readonly IsolatedStorageFile _storageFile;
     private readonly IDataProtector _dataProtector;
     private readonly string _secretpath;
     private readonly string _directoryPath;
@@ -42,7 +41,6 @@ public sealed class AesTotpRepository : ITotpRepository
         _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
         _directoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OtpOnPc");
         _secretpath = Path.Combine(_directoryPath, SecretFileName);
-        _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
         if (File.Exists(_secretpath))
         {
             try
@@ -63,15 +61,15 @@ public sealed class AesTotpRepository : ITotpRepository
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_storageFile.FileExists(IndexFileName))
+            if (StorageFile.FileExists(IndexFileName))
             {
-                using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var infoStream = StorageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
                 _ = infos ?? throw new Exception("Failed to load accounts.");
 
-                if (_storageFile.FileExists(FileName))
+                if (StorageFile.FileExists(FileName))
                 {
-                    using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    using var input = StorageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
 
                     using Aes aes = Aes.Create();
                     using ICryptoTransform decryptor = aes.CreateDecryptor(key, aes.IV);
@@ -129,15 +127,18 @@ public sealed class AesTotpRepository : ITotpRepository
     public async Task Store(byte[] key, IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger)
     {
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        string? oldAccountsFile = await BackupToTempFile(IndexFileName).ConfigureAwait(false);
+
+        string? oldSecretFile = trigger is RepositoryStoreTrigger.OnAdded or RepositoryStoreTrigger.OnDeleted
+            ? await BackupToTempFile(FileName).ConfigureAwait(false)
+            : null;
+
         try
         {
-            if (!_storageFile.DirectoryExists(DirectoryName))
-            {
-                _storageFile.CreateDirectory(DirectoryName);
-            }
+            CreateDirectoryIfNotExists(DirectoryName);
 
             // account-index.jsonだけ変更
-            using var infoStream = _storageFile.CreateFile(IndexFileName);
+            using var infoStream = StorageFile.CreateFile(IndexFileName);
 
             await JsonSerializer.SerializeAsync(infoStream, items.Select(AccountInfo.FromModel).ToArray())
                 .ConfigureAwait(false);
@@ -147,7 +148,7 @@ public sealed class AesTotpRepository : ITotpRepository
                 using Aes aes = Aes.Create();
                 using ICryptoTransform encryptor = aes.CreateEncryptor(key, aes.IV);
 
-                using var output = _storageFile.CreateFile(FileName);
+                using var output = StorageFile.CreateFile(FileName);
                 using var cryptStream = new CryptoStream(output, encryptor, CryptoStreamMode.Write);
                 Array.Clear(s_dummy);
                 await cryptStream.WriteAsync(s_dummy.AsMemory(0, 16)).ConfigureAwait(false);
@@ -161,8 +162,18 @@ public sealed class AesTotpRepository : ITotpRepository
                 }
             }
         }
+        catch
+        {
+            await RevertBackup(FileName, oldSecretFile)
+                .ConfigureAwait(false);
+            await RevertBackup(IndexFileName, oldAccountsFile)
+                .ConfigureAwait(false);
+            throw;
+        }
         finally
         {
+            DeleteBackup(oldSecretFile);
+            DeleteBackup(oldAccountsFile);
             _semaphoreSlim.Release();
         }
     }
@@ -246,14 +257,14 @@ public sealed class AesTotpRepository : ITotpRepository
 
     public Task Clear()
     {
-        if (_storageFile.FileExists(FileName))
-            _storageFile.DeleteFile(FileName);
+        if (StorageFile.FileExists(FileName))
+            StorageFile.DeleteFile(FileName);
 
-        if (_storageFile.FileExists(IndexFileName))
-            _storageFile.DeleteFile(IndexFileName);
+        if (StorageFile.FileExists(IndexFileName))
+            StorageFile.DeleteFile(IndexFileName);
 
-        if (_storageFile.DirectoryExists(DirectoryName))
-            _storageFile.DeleteDirectory(DirectoryName);
+        if (StorageFile.DirectoryExists(DirectoryName))
+            StorageFile.DeleteDirectory(DirectoryName);
 
         if (File.Exists(_secretpath))
         {

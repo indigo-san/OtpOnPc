@@ -19,31 +19,29 @@ using DataProtectionProvider = Windows.Security.Cryptography.DataProtection.Data
 
 namespace OtpOnPc.Services;
 
-public sealed class ProtectedStorageTotpRepository : ITotpRepository
+public sealed class ProtectedStorageTotpRepository : IsolatedStorageRepository, ITotpRepository
 {
     private const string FileName = "wscd\\protected-account";
     private const string IndexFileName = "wscd\\account-index.json";
     private const string Directory = "wscd";
-    private readonly IsolatedStorageFile _storageFile;
     private readonly IDataProtector _dataProtector;
     private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
     public ProtectedStorageTotpRepository()
     {
         _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
-        _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
     }
 
     public Task Clear()
     {
-        if (_storageFile.FileExists(FileName))
-            _storageFile.DeleteFile(FileName);
+        if (StorageFile.FileExists(FileName))
+            StorageFile.DeleteFile(FileName);
 
-        if (_storageFile.FileExists(IndexFileName))
-            _storageFile.DeleteFile(IndexFileName);
+        if (StorageFile.FileExists(IndexFileName))
+            StorageFile.DeleteFile(IndexFileName);
 
-        if (_storageFile.DirectoryExists(Directory))
-            _storageFile.DeleteDirectory(Directory);
+        if (StorageFile.DirectoryExists(Directory))
+            StorageFile.DeleteDirectory(Directory);
 
         return Task.CompletedTask;
     }
@@ -53,17 +51,17 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (_storageFile.FileExists(IndexFileName))
+            if (StorageFile.FileExists(IndexFileName))
             {
-                using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var infoStream = StorageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
                 var infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
                 _ = infos ?? throw new Exception("Failed to load accounts.");
 
-                if (_storageFile.FileExists(FileName))
+                if (StorageFile.FileExists(FileName))
                 {
                     var prov = new DataProtectionProvider();
 
-                    using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    using var input = StorageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
                     using var inputStream = input.AsInputStream();
                     using var output = new MemoryStream();
                     using var outputStream = output.AsOutputStream();
@@ -108,15 +106,18 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
     public async Task Store(IEnumerable<TotpModel> items, RepositoryStoreTrigger trigger)
     {
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
+        string? oldAccountsFile = await BackupToTempFile(IndexFileName).ConfigureAwait(false);
+
+        string? oldSecretFile = trigger is RepositoryStoreTrigger.OnAdded or RepositoryStoreTrigger.OnDeleted
+            ? await BackupToTempFile(FileName).ConfigureAwait(false)
+            : null;
+
         try
         {
-            if (!_storageFile.DirectoryExists(Directory))
-            {
-                _storageFile.CreateDirectory(Directory);
-            }
+            CreateDirectoryIfNotExists(Directory);
 
             // account-index.jsonだけ変更
-            using var infoStream = _storageFile.CreateFile(IndexFileName);
+            using var infoStream = StorageFile.CreateFile(IndexFileName);
             await JsonSerializer.SerializeAsync(infoStream, items.Select(AccountInfo.FromModel).ToArray());
 
             if (trigger is RepositoryStoreTrigger.OnAdded or RepositoryStoreTrigger.OnDeleted)
@@ -124,7 +125,7 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
                 var prov = new DataProtectionProvider("LOCAL=user");
 
                 using var unprotectedStream = new MemoryStream();
-                
+
                 var dict = items.ToDictionary(x => x.Id, x => _dataProtector.Unprotect(x.ProtectedSecretKey));
                 await JsonSerializer.SerializeAsync(unprotectedStream, dict)
                     .ConfigureAwait(false);
@@ -135,14 +136,24 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
                 unprotectedStream.Position = 0;
 
                 using var inputStream = unprotectedStream.AsInputStream();
-                using var output = _storageFile.CreateFile(FileName);
+                using var output = StorageFile.CreateFile(FileName);
                 using var outputStream = output.AsOutputStream();
 
                 await prov.ProtectStreamAsync(inputStream, outputStream);
             }
         }
+        catch
+        {
+            await RevertBackup(FileName, oldSecretFile)
+                .ConfigureAwait(false);
+            await RevertBackup(IndexFileName, oldAccountsFile)
+                .ConfigureAwait(false);
+            throw;
+        }
         finally
         {
+            DeleteBackup(oldSecretFile);
+            DeleteBackup(oldAccountsFile);
             _semaphoreSlim.Release();
         }
     }

@@ -14,7 +14,6 @@ using System;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Threading.Tasks;
-using System.Xml.Schema;
 
 namespace OtpOnPc.ViewModels;
 
@@ -71,7 +70,7 @@ public class AddAccountPageViewModel
     public ReactiveProperty<int> HashMode { get; } = new();
 
     public ReactiveProperty<int> Size { get; } = new(6);
-    
+
     public ReadOnlyReactivePropertySlim<bool> IsValid { get; }
 
     public async Task<bool> Add()
@@ -95,12 +94,12 @@ public class AddAccountPageViewModel
 
         if (!IsValid.Value)
             return false;
-        
+
         var dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
 
         var model = new TotpModel(
             Guid.NewGuid(),
-            dataProtector.Protect(key), 
+            dataProtector.Protect(key),
             Name.Value,
             (OtpHashMode)HashMode.Value,
             Size.Value,
