@@ -1,5 +1,7 @@
 ﻿using Avalonia.Controls.Mixins;
 
+using Microsoft.AspNetCore.DataProtection;
+
 using OtpNet;
 
 using OtpOnPc.Models;
@@ -9,6 +11,7 @@ using Reactive.Bindings;
 using System;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Security.Cryptography;
 
 namespace OtpOnPc.ViewModels;
 
@@ -17,14 +20,16 @@ public sealed class TotpItemViewModel : IDisposable
     private readonly CompositeDisposable _disposables = new();
     private readonly ReadOnlyReactivePropertySlim<Totp> _totp;
     private readonly ReactivePropertySlim<StepManager?> _stepManager = new();
+    private readonly IDataProtector _dataProtector;
 
-    public TotpItemViewModel(TotpModel model)
+    public TotpItemViewModel(TotpModel model, IDataProtector dataProtector)
     {
+        _dataProtector = dataProtector;
         Model.Value = model;
         Name = Model.Select(x => x.Name)
             .ToReadOnlyReactivePropertySlim("")
             .DisposeWith(_disposables);
-        _totp = Model.Select(x => new Totp(x.SecretKey, mode: x.HashMode, totpSize: x.Size))
+        _totp = Model.Select(x => new Totp(new KeyProvider(model, _dataProtector), mode: x.HashMode, totpSize: x.Size))
             .ToReadOnlyReactivePropertySlim()
             .DisposeWith(_disposables)!;
 
@@ -88,5 +93,47 @@ public sealed class TotpItemViewModel : IDisposable
     public void SetStepManager(StepManager? stepManager)
     {
         _stepManager.Value = stepManager;
+    }
+
+    private sealed class KeyProvider : IKeyProvider
+    {
+        private readonly TotpModel _model;
+        private readonly IDataProtector _dataProtector;
+
+        public KeyProvider(TotpModel model, IDataProtector dataProtector)
+        {
+            _model = model;
+            _dataProtector = dataProtector;
+        }
+
+        public byte[] ComputeHmac(OtpHashMode mode, byte[] data)
+        {
+            byte[] hashedValue;
+            using (var hmac = CreateHmacHash(mode))
+            {
+                var key = _dataProtector.Unprotect(_model.ProtectedSecretKey);
+                try
+                {
+                    hmac.Key = key;
+                    hashedValue = hmac.ComputeHash(data);
+                }
+                finally
+                {
+                    Random.Shared.NextBytes(key);
+                }
+            }
+
+            return hashedValue;
+        }
+
+        private static HMAC CreateHmacHash(OtpHashMode otpHashMode)
+        {
+            return otpHashMode switch
+            {
+                OtpHashMode.Sha256 => new HMACSHA256(),
+                OtpHashMode.Sha512 => new HMACSHA512(),
+                _ => new HMACSHA1(),
+            };
+        }
     }
 }

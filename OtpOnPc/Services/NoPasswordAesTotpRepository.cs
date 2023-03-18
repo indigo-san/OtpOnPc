@@ -1,13 +1,20 @@
-﻿using OtpOnPc.Models;
+﻿using Avalonia;
+
+using Microsoft.AspNetCore.DataProtection;
+
+using OtpOnPc.Models;
 
 using Reactive.Bindings;
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.IsolatedStorage;
 using System.Linq;
 using System.Reactive.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
@@ -24,12 +31,14 @@ public sealed class NoPasswordAesTotpRepository : ITotpRepository
 
     private static readonly byte[] s_dummy = new byte[16];
     private readonly IsolatedStorageFile _storageFile;
+    private readonly IDataProtector _dataProtector;
     private readonly string _keypath;
     private readonly string _directoryPath;
     private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
     public NoPasswordAesTotpRepository()
     {
+        _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
         _directoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OtpOnPc");
         _keypath = Path.Combine(_directoryPath, keyFileName);
         _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
@@ -46,42 +55,47 @@ public sealed class NoPasswordAesTotpRepository : ITotpRepository
             }
             var key = await File.ReadAllBytesAsync(_keypath).ConfigureAwait(false);
 
-            AccountInfo[]? infos = null;
             if (_storageFile.FileExists(IndexFileName))
             {
                 using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-                infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
-            }
+                var infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
+                _ = infos ?? throw new Exception("Failed to load accounts.");
 
-            if (infos != null && _storageFile.FileExists(FileName))
-            {
-                using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-                using Aes aes = Aes.Create();
-                using ICryptoTransform decryptor = aes.CreateDecryptor(key, aes.IV);
-                using var cryptStream = new CryptoStream(input, decryptor, CryptoStreamMode.Read);
-                await cryptStream.ReadAsync(s_dummy.AsMemory(0, 16))
-                    .ConfigureAwait(false);
-
-                Dictionary<Guid, byte[]>? dict = null;
-                try
+                if (_storageFile.FileExists(FileName))
                 {
-                    dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(cryptStream)
+                    using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                    using Aes aes = Aes.Create();
+                    using ICryptoTransform decryptor = aes.CreateDecryptor(key, aes.IV);
+                    using var cryptStream = new CryptoStream(input, decryptor, CryptoStreamMode.Read);
+                    await cryptStream.ReadAsync(s_dummy.AsMemory(0, 16))
                         .ConfigureAwait(false);
-                }
-                catch
-                {
-                    return Array.Empty<TotpModel>();
-                }
 
-                if (dict == null)
-                {
-                    return Array.Empty<TotpModel>();
-                }
+                    Dictionary<Guid, byte[]>? dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(cryptStream)
+                        .ConfigureAwait(false);
 
-                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? x.ToModel(key) : null)
-                    .Where(x => x != null)
-                    .ToArray()!;
+                    _ = dict ?? throw new Exception("Failed to restore secret keys.");
+
+                    if (dict.Count != infos.Length)
+                        throw new Exception("The number of accounts does not match the number of secret keys.");
+
+                    var result = new TotpModel[dict.Count];
+                    for (int i = 0; i < infos.Length; i++)
+                    {
+                        var account = infos[i];
+                        if (dict.TryGetValue(account.Id, out var secretKey))
+                        {
+                            result[i] = account.ToModel(_dataProtector.Protect(secretKey));
+                            Random.Shared.NextBytes(secretKey);
+                        }
+                        else
+                        {
+                            throw new Exception("Secret key does not exist.");
+                        }
+                    }
+
+                    return result;
+                }
             }
 
             return Array.Empty<TotpModel>();
@@ -124,8 +138,13 @@ public sealed class NoPasswordAesTotpRepository : ITotpRepository
                 Array.Clear(s_dummy);
                 await cryptStream.WriteAsync(s_dummy.AsMemory(0, 16)).ConfigureAwait(false);
 
-                await JsonSerializer.SerializeAsync(cryptStream, items.ToDictionary(x => x.Id, x => x.SecretKey))
+                var dict = items.ToDictionary(x => x.Id, x => _dataProtector.Unprotect(x.ProtectedSecretKey));
+                await JsonSerializer.SerializeAsync(cryptStream, dict)
                     .ConfigureAwait(false);
+                foreach (var item in dict.Values)
+                {
+                    Random.Shared.NextBytes(item);
+                }
             }
         }
         finally

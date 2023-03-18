@@ -2,6 +2,8 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 
+using Microsoft.AspNetCore.DataProtection;
+
 using OtpOnPc.Services;
 using OtpOnPc.Views;
 
@@ -20,7 +22,8 @@ public class App : Application
         var unlockScreen = new UnlockScreen();
         AvaloniaLocator.CurrentMutable
             .Bind<IUnlockScreen>().ToConstant(unlockScreen)
-            .Bind<IUnlockNotifier>().ToConstant(unlockScreen);
+            .Bind<IUnlockNotifier>().ToConstant(unlockScreen)
+            .Bind<IDataProtectionProvider>().ToConstant(DataProtectionProvider.Create("OtpOnPc"));
 
         var settings = new SettingsService();
         AvaloniaLocator.CurrentMutable.BindToSelf(settings);

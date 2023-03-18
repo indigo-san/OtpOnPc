@@ -1,5 +1,7 @@
 ﻿using Avalonia;
 
+using Microsoft.AspNetCore.DataProtection;
+
 using OtpNet;
 
 using OtpOnPc.Models;
@@ -93,15 +95,18 @@ public class AddAccountPageViewModel
 
         if (!IsValid.Value)
             return false;
+        
+        var dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
 
         var model = new TotpModel(
             Guid.NewGuid(),
-            key, 
+            dataProtector.Protect(key), 
             Name.Value,
             (OtpHashMode)HashMode.Value,
             Size.Value,
             IconType.Value,
             Step.Value);
+        Random.Shared.NextBytes(key);
 
         await _totpManager.AddItem(model);
         return true;

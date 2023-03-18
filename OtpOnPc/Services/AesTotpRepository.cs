@@ -1,6 +1,7 @@
 ﻿using Avalonia;
 
 using Microsoft.AspNetCore.Cryptography.KeyDerivation;
+using Microsoft.AspNetCore.DataProtection;
 
 using OtpOnPc.Models;
 
@@ -28,6 +29,7 @@ public sealed class AesTotpRepository : ITotpRepository
 
     private static readonly byte[] s_dummy = new byte[16];
     private readonly IsolatedStorageFile _storageFile;
+    private readonly IDataProtector _dataProtector;
     private readonly string _secretpath;
     private readonly string _directoryPath;
     private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
@@ -37,6 +39,7 @@ public sealed class AesTotpRepository : ITotpRepository
 
     public AesTotpRepository()
     {
+        _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
         _directoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OtpOnPc");
         _secretpath = Path.Combine(_directoryPath, SecretFileName);
         _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
@@ -55,61 +58,52 @@ public sealed class AesTotpRepository : ITotpRepository
 
     public IReadOnlyReactiveProperty<bool> IsPasswordSet => _isPasswordSet;
 
-    public async Task<TotpModel[]> Restore(byte[] key, bool throwOnError)
+    public async Task<TotpModel[]> Restore(byte[] key)
     {
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
         try
         {
-            AccountInfo[]? infos = null;
             if (_storageFile.FileExists(IndexFileName))
             {
                 using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-                infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
-            }
+                var infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
+                _ = infos ?? throw new Exception("Failed to load accounts.");
 
-            if (infos != null && _storageFile.FileExists(FileName))
-            {
-                using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-                using Aes aes = Aes.Create();
-                using ICryptoTransform decryptor = aes.CreateDecryptor(key, aes.IV);
-                using var cryptStream = new CryptoStream(input, decryptor, CryptoStreamMode.Read);
-                await cryptStream.ReadAsync(s_dummy, 0, 16)
-                    .ConfigureAwait(false);
-
-                Dictionary<Guid, byte[]>? dict = null;
-                try
+                if (_storageFile.FileExists(FileName))
                 {
-                    dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(cryptStream)
+                    using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                    using Aes aes = Aes.Create();
+                    using ICryptoTransform decryptor = aes.CreateDecryptor(key, aes.IV);
+                    using var cryptStream = new CryptoStream(input, decryptor, CryptoStreamMode.Read);
+                    await cryptStream.ReadAsync(s_dummy.AsMemory(0, 16))
                         .ConfigureAwait(false);
-                }
-                catch
-                {
-                    if (throwOnError)
-                    {
-                        throw new InvalidDataException();
-                    }
-                    else
-                    {
-                        return Array.Empty<TotpModel>();
-                    }
-                }
 
-                if (dict == null)
-                {
-                    if (throwOnError)
-                    {
-                        throw new InvalidDataException();
-                    }
-                    else
-                    {
-                        return Array.Empty<TotpModel>();
-                    }
-                }
+                    Dictionary<Guid, byte[]>? dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(cryptStream)
+                        .ConfigureAwait(false);
 
-                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? x.ToModel(key) : null)
-                    .Where(x => x != null)
-                    .ToArray()!;
+                    _ = dict ?? throw new Exception("Failed to restore secret keys.");
+
+                    if (dict.Count != infos.Length)
+                        throw new Exception("The number of accounts does not match the number of secret keys.");
+
+                    var result = new TotpModel[dict.Count];
+                    for (int i = 0; i < infos.Length; i++)
+                    {
+                        var account = infos[i];
+                        if (dict.TryGetValue(account.Id, out var secretKey))
+                        {
+                            result[i] = account.ToModel(_dataProtector.Protect(secretKey));
+                            Random.Shared.NextBytes(secretKey);
+                        }
+                        else
+                        {
+                            throw new Exception("Secret key does not exist.");
+                        }
+                    }
+
+                    return result;
+                }
             }
 
             return Array.Empty<TotpModel>();
@@ -124,7 +118,7 @@ public sealed class AesTotpRepository : ITotpRepository
     {
         if (_hash != null)
         {
-            return await Restore(_hash, false).ConfigureAwait(false);
+            return await Restore(_hash).ConfigureAwait(false);
         }
         else
         {
@@ -158,8 +152,13 @@ public sealed class AesTotpRepository : ITotpRepository
                 Array.Clear(s_dummy);
                 await cryptStream.WriteAsync(s_dummy.AsMemory(0, 16)).ConfigureAwait(false);
 
-                await JsonSerializer.SerializeAsync(cryptStream, items.ToDictionary(x => x.Id, x => x.SecretKey))
+                var dict = items.ToDictionary(x => x.Id, x => _dataProtector.Unprotect(x.ProtectedSecretKey));
+                await JsonSerializer.SerializeAsync(cryptStream, dict)
                     .ConfigureAwait(false);
+                foreach (var item in dict.Values)
+                {
+                    Random.Shared.NextBytes(item);
+                }
             }
         }
         finally
@@ -172,7 +171,7 @@ public sealed class AesTotpRepository : ITotpRepository
     {
         if (_hash != null)
         {
-            await Store(_hash, items, trigger);
+            await Store(_hash, items, trigger).ConfigureAwait(false);
         }
     }
 
@@ -196,16 +195,9 @@ public sealed class AesTotpRepository : ITotpRepository
 
         byte[] hash = GenHash(password, _salt);
 
-        try
-        {
-            var items = await Restore(hash, true).ConfigureAwait(false);
-            _hash = hash;
-            return items;
-        }
-        catch
-        {
-            return null;
-        }
+        var items = await Restore(hash).ConfigureAwait(false);
+        _hash = hash;
+        return items;
     }
 
     private async Task<bool> UpdatePasswordCore(string? oldPassword, string newPassword)

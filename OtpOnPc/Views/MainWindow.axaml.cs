@@ -3,6 +3,7 @@ using Avalonia;
 using FluentAvalonia.UI.Controls;
 using FluentAvalonia.UI.Windowing;
 
+using OtpOnPc.Models;
 using OtpOnPc.Services;
 using OtpOnPc.ViewModels;
 
@@ -105,6 +106,12 @@ public partial class MainWindow : AppWindow
         frame.Navigate(typeof(MainPage), _mainPageViewModel);
         navigation.SelectedItem = _items[0];
     }
+    
+    //public void NavigateToEditPage(TotpModel model)
+    //{
+    //    frame.Navigate(typeof(EditAccountPage), new EditAccountPageViewModel(model));
+    //    navigation.SelectedItem = _items[0];
+    //}
 
     public async void ShowUnlockScreen(AesTotpRepository repos)
     {

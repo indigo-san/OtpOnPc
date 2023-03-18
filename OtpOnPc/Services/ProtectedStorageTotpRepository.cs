@@ -1,5 +1,9 @@
 ﻿#if WINDOWS10_0_17763_0_OR_GREATER
 
+using Avalonia;
+
+using Microsoft.AspNetCore.DataProtection;
+
 using OtpOnPc.Models;
 
 using System;
@@ -11,7 +15,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Windows.Security.Cryptography.DataProtection;
+using DataProtectionProvider = Windows.Security.Cryptography.DataProtection.DataProtectionProvider;
 
 namespace OtpOnPc.Services;
 
@@ -21,10 +25,12 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
     private const string IndexFileName = "wscd\\account-index.json";
     private const string Directory = "wscd";
     private readonly IsolatedStorageFile _storageFile;
+    private readonly IDataProtector _dataProtector;
     private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
     public ProtectedStorageTotpRepository()
     {
+        _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
         _storageFile = IsolatedStorageFile.GetUserStoreForApplication();
     }
 
@@ -47,35 +53,48 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
         await _semaphoreSlim.WaitAsync().ConfigureAwait(false);
         try
         {
-            AccountInfo[]? infos = null;
             if (_storageFile.FileExists(IndexFileName))
             {
                 using var infoStream = _storageFile.OpenFile(IndexFileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-                infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
-            }
+                var infos = await JsonSerializer.DeserializeAsync<AccountInfo[]>(infoStream).ConfigureAwait(false);
+                _ = infos ?? throw new Exception("Failed to load accounts.");
 
-            if (infos != null && _storageFile.FileExists(FileName))
-            {
-                var prov = new DataProtectionProvider();
-
-                using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-                using var inputStream = input.AsInputStream();
-                using var output = new MemoryStream();
-                using var outputStream = output.AsOutputStream();
-
-                await prov.UnprotectStreamAsync(inputStream, outputStream);
-
-                output.Position = 0;
-                var dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(output)
-                    .ConfigureAwait(false);
-                if (dict == null)
+                if (_storageFile.FileExists(FileName))
                 {
-                    return Array.Empty<TotpModel>();
-                }
+                    var prov = new DataProtectionProvider();
 
-                return infos.Select(x => dict.TryGetValue(x.Id, out var key) ? x.ToModel(key) : null)
-                    .Where(x => x != null)
-                    .ToArray()!;
+                    using var input = _storageFile.OpenFile(FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
+                    using var inputStream = input.AsInputStream();
+                    using var output = new MemoryStream();
+                    using var outputStream = output.AsOutputStream();
+
+                    await prov.UnprotectStreamAsync(inputStream, outputStream);
+
+                    output.Position = 0;
+                    var dict = await JsonSerializer.DeserializeAsync<Dictionary<Guid, byte[]>>(output)
+                        .ConfigureAwait(false);
+                    _ = dict ?? throw new Exception("Failed to restore secret keys.");
+
+                    if (dict.Count != infos.Length)
+                        throw new Exception("The number of accounts does not match the number of secret keys.");
+
+                    var result = new TotpModel[dict.Count];
+                    for (int i = 0; i < infos.Length; i++)
+                    {
+                        var account = infos[i];
+                        if (dict.TryGetValue(account.Id, out var secretKey))
+                        {
+                            result[i] = account.ToModel(_dataProtector.Protect(secretKey));
+                            Random.Shared.NextBytes(secretKey);
+                        }
+                        else
+                        {
+                            throw new Exception("Secret key does not exist.");
+                        }
+                    }
+
+                    return result;
+                }
             }
 
             return Array.Empty<TotpModel>();
@@ -105,8 +124,14 @@ public sealed class ProtectedStorageTotpRepository : ITotpRepository
                 var prov = new DataProtectionProvider("LOCAL=user");
 
                 using var unprotectedStream = new MemoryStream();
-                await JsonSerializer.SerializeAsync(unprotectedStream, items.ToDictionary(x => x.Id, x => x.SecretKey))
+                
+                var dict = items.ToDictionary(x => x.Id, x => _dataProtector.Unprotect(x.ProtectedSecretKey));
+                await JsonSerializer.SerializeAsync(unprotectedStream, dict)
                     .ConfigureAwait(false);
+                foreach (var item in dict.Values)
+                {
+                    Random.Shared.NextBytes(item);
+                }
                 unprotectedStream.Position = 0;
 
                 using var inputStream = unprotectedStream.AsInputStream();

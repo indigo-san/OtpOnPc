@@ -1,5 +1,7 @@
 ﻿using Avalonia;
 
+using Microsoft.AspNetCore.DataProtection;
+
 using OtpOnPc.Models;
 using OtpOnPc.Services;
 
@@ -17,6 +19,7 @@ namespace OtpOnPc.ViewModels;
 
 public class MainPageViewModel
 {
+    private readonly IDataProtector _dataProtector;
     private readonly TotpModelManager _totpManager;
     private readonly Dictionary<int, StepManager> _steps = new();
     private CancellationTokenSource? _cts;
@@ -24,6 +27,7 @@ public class MainPageViewModel
 
     public MainPageViewModel()
     {
+        _dataProtector = AvaloniaLocator.Current.GetRequiredService<IDataProtectionProvider>().CreateProtector("SecretKey.v1");
         _totpManager = AvaloniaLocator.Current.GetRequiredService<TotpModelManager>();
         _initializeTask = Init();
 
@@ -107,7 +111,7 @@ public class MainPageViewModel
 
     private void OnTotpReposAdded(object? sender, TotpModel e)
     {
-        var viewModel = new TotpItemViewModel(e);
+        var viewModel = new TotpItemViewModel(e, _dataProtector);
         Items.Add(viewModel);
 
         AddStep(e.Step, viewModel);
